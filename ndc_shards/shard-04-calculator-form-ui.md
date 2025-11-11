@@ -1,12 +1,52 @@
 # SHARD 4: Calculator Form UI
 
+## Status: 🔜 READY TO START
+
 ## Objective
 Build the main calculator interface with drug input form, validation, and user experience enhancements.
 
 ## Dependencies
-- Shard 1 (Project Foundation)
-- Shard 2 (Authentication)
-- Shard 3 (UI Components)
+- ✅ Shard 1 (Project Foundation) - COMPLETE
+- ✅ Shard 2 (Authentication) - COMPLETE
+- ✅ Shard 3 (UI Components) - COMPLETE
+
+## Context from Shard 3
+
+**Available UI Components:**
+All components are imported from `$lib/components/ui/[component-name]`
+
+**Form Components:**
+- `Button` - 6 variants (default, destructive, outline, secondary, ghost, link), 4 sizes (default, sm, lg, icon)
+- `Input` - Styled input field with validation states
+- `Label` - Form label component
+- `Textarea` - Multi-line text input
+
+**Layout Components:**
+- `Card`, `CardHeader`, `CardContent`, `CardFooter` - Card container components
+
+**Feedback Components:**
+- `Alert`, `AlertTitle`, `AlertDescription` - Alert messages (2 variants: default, destructive)
+- `Badge` - Small status indicators (4 variants: default, secondary, destructive, outline)
+- `Spinner` - Loading spinner (3 sizes: sm, md, lg)
+- `Skeleton` - Loading placeholder
+
+**Available Utilities:**
+- `cn()` - Class name merging utility (import from `$lib/utils/cn`)
+- `flyAndScale()` - Svelte transition utility (import from `$lib/utils/transitions`)
+
+**Existing Validation:**
+- `validation.ts` - Zod schemas for auth (loginSchema, signupSchema, emailSchema, passwordSchema)
+- `errors.ts` - Error handling (AppError class, handleFirebaseError function)
+
+**Component Demo:**
+- `/components-demo` - Interactive showcase of all UI components
+
+**What to Build:**
+- Calculator form with drug search, instructions, and days supply inputs
+- Form validation with Zod schemas
+- Calculator state management with Svelte stores
+- Loading and error states
+- Medical abbreviation helpers
 
 ## Files to Create/Modify
 
