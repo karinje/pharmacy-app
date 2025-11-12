@@ -1,5 +1,4 @@
 "use strict";
-var _a;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.calculatePrescription = void 0;
 const functions = require("firebase-functions");
@@ -9,9 +8,15 @@ const openai_1 = require("openai");
 if (admin.apps.length === 0) {
     admin.initializeApp();
 }
-const openai = new openai_1.default({
-    apiKey: ((_a = functions.config().openai) === null || _a === void 0 ? void 0 : _a.key) || process.env.OPENAI_API_KEY
-});
+// Lazy initialization of OpenAI client (only when function is called)
+function getOpenAIClient() {
+    var _a;
+    const apiKey = ((_a = functions.config().openai) === null || _a === void 0 ? void 0 : _a.key) || process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+        throw new Error('OpenAI API key not configured. Set functions.config().openai.key or OPENAI_API_KEY environment variable.');
+    }
+    return new openai_1.default({ apiKey });
+}
 function buildInstructionParserPrompt(drugName, instructions, daysSupply) {
     return `You are a pharmaceutical expert analyzing prescription instructions to calculate medication quantities.
 
@@ -168,6 +173,7 @@ exports.calculatePrescription = functions
     try {
         // Step 1: Parse instructions with OpenAI
         const parsingPrompt = buildInstructionParserPrompt(data.drugName, data.instructions, data.daysSupply);
+        const openai = getOpenAIClient();
         const parsingCompletion = await openai.chat.completions.create({
             model: 'gpt-4o',
             messages: [
@@ -201,7 +207,7 @@ exports.calculatePrescription = functions
             manufacturer: p.manufacturer,
             isActive: p.isActive
         })), data.daysSupply);
-        const optimizationCompletion = await openai.chat.completions.create({
+        const optimizationCompletion = await getOpenAIClient().chat.completions.create({
             model: 'gpt-4o',
             messages: [
                 {
@@ -219,7 +225,7 @@ exports.calculatePrescription = functions
         const optimization = parseJSONResponse(optimizationCompletion.choices[0].message.content || '{}');
         // Step 4: Generate explanation
         const explanationPrompt = buildExplanationPrompt(data.drugName, data.instructions, data.daysSupply, parsing, quantity, optimization);
-        const explanationCompletion = await openai.chat.completions.create({
+        const explanationCompletion = await getOpenAIClient().chat.completions.create({
             model: 'gpt-4o',
             messages: [
                 {

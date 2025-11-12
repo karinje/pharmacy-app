@@ -7,9 +7,14 @@ if (admin.apps.length === 0) {
 	admin.initializeApp();
 }
 
-const openai = new OpenAI({
-	apiKey: functions.config().openai?.key || process.env.OPENAI_API_KEY
-});
+// Lazy initialization of OpenAI client (only when function is called)
+function getOpenAIClient(): OpenAI {
+	const apiKey = functions.config().openai?.key || process.env.OPENAI_API_KEY;
+	if (!apiKey) {
+		throw new Error('OpenAI API key not configured. Set functions.config().openai.key or OPENAI_API_KEY environment variable.');
+	}
+	return new OpenAI({ apiKey });
+}
 
 interface CalculateRequest {
 	drugName: string;
@@ -218,6 +223,7 @@ export const calculatePrescription = functions
 				data.daysSupply
 			);
 
+			const openai = getOpenAIClient();
 			const parsingCompletion = await openai.chat.completions.create({
 				model: 'gpt-4o',
 				messages: [
@@ -271,7 +277,7 @@ export const calculatePrescription = functions
 				data.daysSupply
 			);
 
-			const optimizationCompletion = await openai.chat.completions.create({
+			const optimizationCompletion = await getOpenAIClient().chat.completions.create({
 				model: 'gpt-4o',
 				messages: [
 					{
@@ -301,7 +307,7 @@ export const calculatePrescription = functions
 				optimization
 			);
 
-			const explanationCompletion = await openai.chat.completions.create({
+			const explanationCompletion = await getOpenAIClient().chat.completions.create({
 				model: 'gpt-4o',
 				messages: [
 					{
