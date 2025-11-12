@@ -1,10 +1,35 @@
 # SHARD 11: Testing Suite
 
+**Status:** 🔜 READY TO START
+
 ## Objective
 Implement comprehensive testing including unit tests, integration tests, and end-to-end tests.
 
 ## Dependencies
-- All previous shards
+- ✅ Shard 1-10 (All previous shards) - COMPLETED
+
+## Context from Shard 10
+
+**Completed History & Saved Calculations:**
+- `history.service.ts` - Firestore-based history management service with CRUD operations
+- `history.ts` store - Reactive Svelte store for history state management
+- History UI components:
+  - `HistoryCard.svelte` - Displays single saved calculation
+  - `HistoryList.svelte` - Grid list with loading/empty states
+  - `SearchBar.svelte` - Search and favorites filter
+- History pages:
+  - `/history` - Main history page with search/filter
+  - `/history/[id]` - Detail view for saved calculations
+- Auto-save functionality - Calculations automatically saved to history after completion
+- Firestore security rules and indexes deployed
+- Data transformation for Firestore (handles undefined values and invalid dates)
+
+**Key Implementation Details:**
+- `SavedCalculation` interface wraps `CalculationResult` with metadata (notes, favorites, timestamps)
+- History service handles data cleaning (removes undefined, validates dates)
+- Search supports drug name, instructions, and notes
+- Favorites filter and sorting by creation date
+- Firestore collection: `calculations` with composite indexes for efficient querying
 
 ## Files to Create
 

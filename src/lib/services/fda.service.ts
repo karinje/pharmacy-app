@@ -86,71 +86,157 @@ class FDAService {
 	}
 
 	/**
-	 * Get active NDCs for a drug by generic name
+	 * Get ingredient name from RxNorm using RxCUI
+	 * Returns the ingredient (IN) or precise ingredient (PIN) name that FDA would recognize
 	 */
-	async searchNDCsByDrugName(genericName: string): Promise<NDCProduct[]> {
+	private async getIngredientNameFromRxNorm(rxcui: string): Promise<string | null> {
+		try {
+			console.log(`[FDA] Getting ingredient name from RxNorm for RxCUI: ${rxcui}`);
+			
+			// RxNorm API: Get all related concepts, then filter for IN/PIN
+			// Note: Some RxCUIs may not have related concepts, which returns 400
+			const url = `https://rxnav.nlm.nih.gov/REST/rxcui/${rxcui}/related.json`;
+			const response = await fetch(url);
+			
+			if (!response.ok) {
+				// 400 usually means no related concepts exist for this RxCUI - not an error
+				if (response.status === 400) {
+					console.log(`[FDA] RxCUI ${rxcui} has no related concepts (common for brand names)`);
+				} else {
+					console.warn(`[FDA] RxNorm API returned ${response.status} for RxCUI ${rxcui}`);
+				}
+				return null;
+			}
+
+			const data = await response.json();
+			console.log(`[FDA] RxNorm response for RxCUI ${rxcui}:`, JSON.stringify(data).substring(0, 500));
+			
+			const relatedGroup = data.relatedGroup?.conceptGroup;
+			
+			if (!relatedGroup || !Array.isArray(relatedGroup)) {
+				console.warn(`[FDA] No conceptGroup found in RxNorm response for RxCUI ${rxcui}`);
+				return null;
+			}
+
+			// Find IN (Ingredient) first, fallback to PIN (Precise Ingredient)
+			for (const group of relatedGroup) {
+				if (group.tty === 'IN' || group.tty === 'PIN') {
+					const concepts = group.conceptProperties;
+					if (concepts && concepts.length > 0) {
+						const ingredientName = concepts[0].name;
+						const cleaned = this.cleanDrugNameForSearch(ingredientName);
+						console.log(`[FDA] Found ingredient name for RxCUI ${rxcui}: "${ingredientName}" -> "${cleaned}"`);
+						return cleaned;
+					}
+				}
+			}
+
+			console.warn(`[FDA] No IN/PIN found in RxNorm response for RxCUI ${rxcui}`);
+			return null;
+		} catch (error) {
+			console.warn(`[FDA] Failed to get ingredient name from RxNorm for RxCUI ${rxcui}:`, error);
+			return null;
+		}
+	}
+
+	/**
+	 * Get active NDCs for a drug by generic name
+	 * @param genericName - Drug name to search for
+	 * @param rxcui - Optional RxCUI to get ingredient name from RxNorm
+	 */
+	async searchNDCsByDrugName(genericName: string, rxcui?: string): Promise<NDCProduct[]> {
 		// Clean the name for search
 		const cleanedName = this.cleanDrugNameForSearch(genericName);
-		const cacheKey = `fda:search:${cleanedName}`;
+		const cacheKey = `fda:search:${cleanedName}${rxcui ? `:${rxcui}` : ''}`;
 
 		const cached = cacheService.get<NDCProduct[]>(cacheKey);
 		if (cached) return cached;
 
-		try {
-			// Try exact match first
-			let query = `generic_name:"${cleanedName}"`;
-			let params = {
-				search: query,
-				limit: this.resultsLimit
-			};
-
-			let queryString = buildQueryString(params);
-			let url = `${this.baseUrl}?${queryString}`;
-
-			let response = await retryWithBackoff(async () => {
-				return fetchWithTimeout(url);
-			});
-
-			let data: FDASearchResponse = await response.json();
-
-			// If no results, try with just the first word (base drug name)
-			if (!data.results || data.results.length === 0) {
-				const firstWord = cleanedName.split(/\s+/)[0];
-				if (firstWord && firstWord !== cleanedName) {
-					console.log(`No results for "${cleanedName}", trying base name: "${firstWord}"`);
-					query = `generic_name:"${firstWord}"`;
-					params = {
-						search: query,
-						limit: this.resultsLimit
-					};
-					queryString = buildQueryString(params);
-					url = `${this.baseUrl}?${queryString}`;
-
-					response = await retryWithBackoff(async () => {
-						return fetchWithTimeout(url);
-					});
-
-					data = await response.json();
-				}
+		// If we have an RxCUI, try to get the ingredient name from RxNorm
+		let ingredientName: string | null = null;
+		if (rxcui) {
+			console.log(`[FDA] RxCUI provided (${rxcui}), fetching ingredient name from RxNorm...`);
+			ingredientName = await this.getIngredientNameFromRxNorm(rxcui);
+			if (ingredientName) {
+				console.log(`[FDA] Using ingredient name "${ingredientName}" for FDA search (original: "${cleanedName}")`);
+			} else {
+				console.log(`[FDA] Could not get ingredient name from RxNorm, using original name "${cleanedName}"`);
 			}
-
-			if (!data.results || data.results.length === 0) {
-				return [];
-			}
-
-			// Transform FDA results to our product format
-			const products = this.transformFDAResults(data.results);
-
-			// Cache for 24 hours
-			cacheService.set(cacheKey, products, CACHE_DURATION.FDA_NDC);
-
-			return products;
-		} catch (error) {
-			if (error instanceof ApiError && error.status === 404) {
-				return [];
-			}
-			throw new ApiError('Failed to search NDCs', 500, 'FDA', error);
+		} else {
+			console.log(`[FDA] No RxCUI provided, using drug name "${cleanedName}" for search`);
 		}
+
+		const searchStrategies = [
+			// Strategy 1: Exact match with quotes (most specific)
+			`generic_name:"${cleanedName}"`,
+			// Strategy 2: Exact match without quotes (allows partial matches)
+			`generic_name:${cleanedName}`,
+			// Strategy 3: Try brand name (some drugs are listed by brand)
+			`brand_name:"${cleanedName}"`,
+			// Strategy 4: Try first word only (for compound names)
+			cleanedName.split(/\s+/).length > 1 ? `generic_name:"${cleanedName.split(/\s+/)[0]}"` : null,
+			// Strategy 5: Case-insensitive search (FDA sometimes has uppercase)
+			`generic_name:"${cleanedName.toUpperCase()}"`,
+			// Strategy 6: If we got ingredient name from RxNorm, try that
+			ingredientName && ingredientName !== cleanedName ? `generic_name:"${ingredientName}"` : null,
+			ingredientName && ingredientName !== cleanedName ? `generic_name:${ingredientName}` : null
+		].filter((strategy): strategy is string => strategy !== null);
+
+		let lastError: Error | null = null;
+
+		for (const queryStr of searchStrategies) {
+			try {
+				const params = {
+					search: queryStr,
+					limit: this.resultsLimit
+				};
+
+				const queryString = buildQueryString(params);
+				const url = `${this.baseUrl}?${queryString}`;
+
+				const response = await retryWithBackoff(async () => {
+					return fetchWithTimeout(url);
+				});
+
+				// Check if response is ok
+				if (!response.ok) {
+					if (response.status === 404) {
+						continue; // Try next strategy
+					}
+					throw new Error(`FDA API returned status ${response.status}`);
+				}
+
+				const data: FDASearchResponse = await response.json();
+
+				if (data.results && data.results.length > 0) {
+					// Transform FDA results to our product format
+					const products = this.transformFDAResults(data.results);
+
+					// Cache for 24 hours
+					cacheService.set(cacheKey, products, CACHE_DURATION.FDA_NDC);
+
+					console.log(`FDA search succeeded for "${cleanedName}" using query: ${queryStr} (found ${products.length} products)`);
+					return products;
+				}
+			} catch (error) {
+				// Log error but continue to next strategy
+				console.warn(`FDA search failed for "${cleanedName}" with query "${queryStr}":`, error);
+				lastError = error instanceof Error ? error : new Error(String(error));
+				continue;
+			}
+		}
+
+		// All strategies failed
+		console.error(`All FDA search strategies failed for "${cleanedName}"`);
+		if (lastError instanceof ApiError && lastError.status === 404) {
+			return [];
+		}
+		throw new ApiError(
+			`Failed to search NDCs for "${genericName}". The drug may not be in the FDA database or may be listed under a different name.`,
+			500,
+			'FDA',
+			lastError
+		);
 	}
 
 	/**
@@ -283,6 +369,15 @@ class FDAService {
 						result.listing_expiration_date
 					);
 
+					// Safely parse expiration date
+					let expirationDate: Date | undefined = undefined;
+					if (result.listing_expiration_date) {
+						const parsedDate = new Date(result.listing_expiration_date);
+						if (!isNaN(parsedDate.getTime())) {
+							expirationDate = parsedDate;
+						}
+					}
+
 					products.push({
 						ndc: pkg.package_ndc,
 						ndc11: this.normalizeNDC(pkg.package_ndc),
@@ -294,14 +389,14 @@ class FDAService {
 						packageUnit: unit,
 						isActive,
 						marketingStatus: result.marketing_status,
-						expirationDate: result.listing_expiration_date
-							? new Date(result.listing_expiration_date)
-							: undefined,
+						expirationDate,
 						dosageForm: result.dosage_form,
 						route: result.route,
-						strength: result.active_ingredients
-							.map((ing) => `${ing.name} ${ing.strength}`)
-							.join(', ')
+						strength: result.active_ingredients && Array.isArray(result.active_ingredients)
+							? result.active_ingredients
+								.map((ing) => `${ing.name} ${ing.strength}`)
+								.join(', ')
+							: ''
 					});
 				}
 			}

@@ -11,9 +11,17 @@
 		calculationError
 	} from '$lib/stores/calculator';
 	import { calculationService } from '$lib/services/calculation.service';
+	import { historyService } from '$lib/services/history.service';
+	import { user } from '$lib/stores/auth';
+	import { goto } from '$app/navigation';
 	import type { CalculatorFormData } from '$lib/types/calculator';
+	import type { PageData } from './$types';
+
+	// Accept params to avoid SvelteKit warning (even if unused)
+	export let params: PageData['params'];
 
 	let error: string | null = null;
+	let saving = false;
 
 	async function handleSubmit(event: CustomEvent<CalculatorFormData>) {
 		error = null;
@@ -25,6 +33,17 @@
 				calculatorStore.setProgress(progress);
 			});
 			calculatorStore.setResult(result);
+
+			// Auto-save to history
+			if ($user && result) {
+				try {
+					await historyService.saveCalculation($user.uid, result);
+					console.log('Calculation auto-saved to history');
+				} catch (saveError) {
+					// Don't show error to user - auto-save is silent
+					console.error('Failed to auto-save calculation:', saveError);
+				}
+			}
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'An unexpected error occurred';
 			calculatorStore.setError(error);
@@ -40,9 +59,24 @@
 		calculatorStore.reset();
 	}
 
-	function handleSave() {
-		// TODO: Implement save to history (next shard)
-		alert('Save functionality coming in next shard!');
+	async function handleSave() {
+		if (!$calculationResult || !$user) return;
+
+		saving = true;
+		try {
+			const id = await historyService.saveCalculation($user.uid, $calculationResult);
+
+			// Show success message
+			alert('Calculation saved to history!');
+
+			// Optional: Navigate to saved calculation
+			// goto(`/history/${id}`);
+		} catch (error) {
+			console.error('Failed to save:', error);
+			alert('Failed to save calculation');
+		} finally {
+			saving = false;
+		}
 	}
 
 	function handleRetry() {

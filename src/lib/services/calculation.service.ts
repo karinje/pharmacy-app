@@ -22,6 +22,7 @@ class CalculationService {
 			if (input.rxcui) {
 				// RxCUI already exists from autocomplete selection (CTSS or RxNorm)
 				// Skip normalization - CTSS is RxNorm-based, so RxCUI is reliable
+				console.log(`[Calculation] Using RxCUI from autocomplete: ${input.rxcui} for drug: ${input.drugName}`);
 				onProgress?.({
 					stage: 'normalizing',
 					message: 'Using drug identifier from selection...',
@@ -74,7 +75,7 @@ class CalculationService {
 				progress: 30
 			});
 
-			const allProducts = await fdaService.searchNDCsByDrugName(normalized.name);
+			const allProducts = await fdaService.searchNDCsByDrugName(normalized.name, normalized.rxcui);
 
 			if (allProducts.length === 0) {
 				throw new ApiError('No NDC products found for this drug', 404, 'FDA');
