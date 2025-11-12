@@ -22,7 +22,7 @@ if (browser) {
   app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
   auth = getAuth(app);
   db = getFirestore(app);
-  functions = getFunctions(app);
+  functions = getFunctions(app, 'us-central1');
 }
 
 export { app, auth, db, functions };

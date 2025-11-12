@@ -1,13 +1,61 @@
 # SHARD 7: OpenAI Integration & Prompt Engineering
 
+## Status: 🔜 READY TO START
+
 ## Objective
 Integrate OpenAI GPT-4o for intelligent parsing of prescription instructions, quantity calculations, and package optimization with detailed reasoning.
 
 ## Dependencies
-- Shard 1 (Project Foundation)
-- Shard 4 (Calculator Form)
-- Shard 5 (RxNorm Integration)
-- Shard 6 (FDA Integration)
+- ✅ Shard 1 (Project Foundation) - COMPLETE
+- ✅ Shard 4 (Calculator Form) - COMPLETE
+- ✅ Shard 5 (RxNorm Integration) - COMPLETE
+- ✅ Shard 6 (FDA Integration) - COMPLETE
+
+## Context from Shard 6
+
+**Completed FDA Integration:**
+- `fda.service.ts` - Client-side FDA service with full NDC validation
+- `validateNDC` Cloud Function - Server-side NDC validation with Firestore caching
+- `NDCProduct` interface - Comprehensive product data structure
+- NDC normalization to 11-digit format (handles 5-4-2, 5-3-2, 4-4-2 formats)
+- Package size/unit parsing from FDA descriptions
+- Active/inactive product filtering
+- Client-side caching (24 hours) and server-side Firestore caching (24 hours)
+
+**Available from FDA Service:**
+- `searchNDCsByDrugName(genericName)` - Search NDCs by generic drug name
+- `validateNDC(ndc)` - Validate specific NDC code, returns `NDCProduct | null`
+- `getProductPackages(productNDC)` - Get all packages for a product
+- `filterActiveNDCs(products)` - Filter active products
+- `filterInactiveNDCs(products)` - Filter inactive products
+- `normalizeNDC(ndc)` - Normalize NDC to 11-digit format
+
+**NDCProduct Structure:**
+```typescript
+{
+  ndc: string;                    // Original format (e.g., "72288-050-60")
+  ndc11: string;                  // Normalized 11-digit format
+  genericName: string;
+  brandName?: string;
+  manufacturer: string;
+  packageDescription: string;
+  packageSize: number;             // Parsed from description
+  packageUnit: string;             // TABLET, CAPSULE, mL, etc.
+  isActive: boolean;
+  marketingStatus: string;
+  expirationDate?: Date;
+  dosageForm: string;
+  route: string[];
+  strength: string;
+}
+```
+
+**Integration Points for OpenAI:**
+- Use `searchNDCsByDrugName()` to get available packages after RxNorm normalization
+- Filter active NDCs using `filterActiveNDCs()` before sending to OpenAI
+- Include `packageSize`, `packageUnit`, `manufacturer` in optimization prompts
+- Use `isActive` flag to warn about inactive products
+- Normalize NDCs using `normalizeNDC()` for consistent comparison
 
 ## Files to Create/Modify
 
@@ -81,9 +129,16 @@ export interface OpenAICalculationRequest {
   daysSupply: number;
   availablePackages: Array<{
     ndc: string;
-    size: number;
+    ndc11: string;              // Normalized 11-digit format
+    genericName: string;
+    brandName?: string;
     manufacturer: string;
+    packageSize: number;        // Parsed from FDA description
+    packageUnit: string;        // TABLET, CAPSULE, mL, etc.
     isActive: boolean;
+    marketingStatus: string;
+    dosageForm: string;
+    strength: string;
   }>;
 }
 

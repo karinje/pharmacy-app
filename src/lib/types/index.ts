@@ -12,7 +12,12 @@ export interface RxNormConcept {
   tty?: string;
 }
 
-export interface NDCProduct {
+// Re-export FDA types (comprehensive NDCProduct definition)
+export type { NDCProduct, FDANDCResult, FDAIngredient, FDAPackaging, FDASearchResponse } from './fda';
+
+// Legacy NDCProduct interface - deprecated, use FDA NDCProduct instead
+/** @deprecated Use NDCProduct from './fda' instead */
+export interface LegacyNDCProduct {
   ndc: string;
   genericName: string;
   brandName?: string;
