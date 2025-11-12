@@ -4,6 +4,8 @@ import {
   signOut as firebaseSignOut,
   sendPasswordResetEmail,
   updateProfile,
+  signInWithPopup,
+  GoogleAuthProvider,
   type UserCredential
 } from 'firebase/auth';
 import { auth } from '$lib/config/firebase';
@@ -48,6 +50,35 @@ class AuthService {
       
       // Update last login time
       await userService.updateLastLogin(userCredential.user.uid);
+      
+      return userCredential;
+    } catch (error) {
+      throw handleFirebaseError(error);
+    }
+  }
+
+  /**
+   * Sign in with Google
+   */
+  async loginWithGoogle(): Promise<UserCredential> {
+    try {
+      const provider = new GoogleAuthProvider();
+      const userCredential = await signInWithPopup(auth, provider);
+      
+      // Check if user document exists, create if not
+      const userDoc = await userService.getUser(userCredential.user.uid);
+      if (!userDoc) {
+        await userService.createUser({
+          uid: userCredential.user.uid,
+          email: userCredential.user.email!,
+          displayName: userCredential.user.displayName || undefined,
+          role: 'pharmacist',
+          createdAt: new Date(),
+          lastLoginAt: new Date()
+        });
+      } else {
+        await userService.updateLastLogin(userCredential.user.uid);
+      }
       
       return userCredential;
     } catch (error) {

@@ -1,11 +1,50 @@
 # SHARD 5: RxNorm API Integration
 
+## Status: 🔜 READY TO START
+
 ## Objective
 Integrate RxNorm API for drug name normalization and RxCUI lookup, with caching and error handling.
 
 ## Dependencies
-- Shard 1 (Project Foundation)
-- Shard 4 (Calculator Form UI)
+- ✅ Shard 1 (Project Foundation) - COMPLETE
+- ✅ Shard 2 (Authentication) - COMPLETE
+- ✅ Shard 3 (UI Components) - COMPLETE
+- ✅ Shard 4 (Calculator Form UI) - COMPLETE
+
+## Context from Shard 4
+
+**Completed Calculator Form:**
+- `DrugSearchInput.svelte` - Drug name input with autocomplete (currently static list)
+- `InstructionsInput.svelte` - Instructions textarea with medical abbreviation detection
+- `DaysSupplyInput.svelte` - Days supply input with quick select buttons
+- `CalculatorForm.svelte` - Main form component with validation
+- Calculator page at `/calculator` route
+
+**Form State Management:**
+- `calculator.ts` store with methods: setInput, setCalculating, setResult, setError, reset
+- Form validation with Zod schemas
+- Loading and error states implemented
+
+**What to Integrate:**
+- Replace static drug suggestions with live RxNorm API calls
+- Add drug name normalization before calculation
+- Implement RxCUI lookup for accurate drug identification
+- Add caching to reduce API calls and improve performance
+
+**Available Form Data:**
+```typescript
+interface CalculatorFormData {
+  drugName: string;      // e.g., "Metformin 500mg"
+  instructions: string;  // e.g., "Take 1 tablet BID"
+  daysSupply: number;    // e.g., 30
+}
+```
+
+**Next Steps:**
+- Integrate RxNorm API when user types in drug name field
+- Show real drug suggestions from RxNorm
+- Normalize drug name before sending to calculation
+- Store RxCUI for use in NDC lookup (Shard 6)
 
 ## Files to Create/Modify
 
