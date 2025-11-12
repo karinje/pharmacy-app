@@ -4,11 +4,16 @@
 	import { cn } from '$lib/utils/cn';
 	import { rxnormService } from '$lib/services/rxnorm.service';
 	import type { RxNormCandidate } from '$lib/types/rxnorm';
-	import { onDestroy } from 'svelte';
+	import { onDestroy, createEventDispatcher } from 'svelte';
 
 	export let value: string = '';
 	export let error: string | undefined = undefined;
 	export let disabled: boolean = false;
+
+	const dispatch = createEventDispatcher<{
+		rxcuiSelected: { rxcui: string; name: string };
+		drugNameChanged: void;
+	}>();
 
 	let focused = false;
 	let suggestions: RxNormCandidate[] = [];
@@ -134,6 +139,14 @@
 		suggestions = [];
 		focused = false;
 		loading = false;
+		
+		// Emit RxCUI if available (from CTSS or RxNorm)
+		if (candidate.rxcui) {
+			dispatch('rxcuiSelected', {
+				rxcui: candidate.rxcui,
+				name: candidate.name
+			});
+		}
 	}
 
 	function handleBlur() {
@@ -166,7 +179,11 @@
 			type="text"
 			placeholder="e.g., Metformin 500mg"
 			bind:value
-			on:input={handleInput}
+			on:input={() => {
+				handleInput();
+				// Clear RxCUI when user manually edits (not from autocomplete)
+				dispatch('drugNameChanged');
+			}}
 			on:focus={() => (focused = true)}
 			on:blur={handleBlur}
 			{disabled}

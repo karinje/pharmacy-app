@@ -710,3 +710,196 @@ export { normalizeDrugName } from './rxnorm/normalize';
 - ✅ Confirmed caching reduces redundant API calls
 
 ---
+
+## CTSS RxTerms API: Background & Optimization
+
+### CTSS RxTerms Overview
+
+**What is CTSS RxTerms?**
+- **Full Name**: Clinical Table Search Service (CTSS) RxTerms API
+- **Provider**: U.S. National Library of Medicine (NLM) - same organization that maintains RxNorm
+- **URL**: `https://clinicaltables.nlm.nih.gov/api/rxterms/v3/search`
+- **Purpose**: Purpose-built autocomplete/search endpoint for drug names
+
+**Data Source & Reliability:**
+- **Derived from RxNorm**: RxTerms is an "interface terminology" directly derived from RxNorm data
+- **Same Quality**: Built on RxNorm's standardized drug nomenclature (U.S. standard for clinical drugs)
+- **Monthly Updates**: Updated monthly to reflect the latest RxNorm releases
+- **NLM Maintained**: Official NLM service, ensuring reliability and accuracy
+- **Clinical Focus**: Designed specifically for prescription writing and medication history recording
+
+**Key Characteristics:**
+- ✅ **No Normalization Score**: CTSS doesn't provide confidence scores (we hardcode '100' for autocomplete matches)
+- ✅ **User-Friendly Display**: Returns clean, display-ready drug names (e.g., "ADVIL (Oral Pill)")
+- ✅ **Fast & Optimized**: Purpose-built for autocomplete/search use cases
+- ✅ **Includes RxCUI**: Returns RxNorm Concept Unique Identifier (RxCUI) for each match
+- ✅ **U.S. Focused**: Tailored for U.S. prescribing practices
+
+**Relationship to RxNorm:**
+```
+RxNorm (Core Standard)
+    ↓
+RxTerms (Interface Terminology - derived from RxNorm)
+    ↓
+CTSS RxTerms API (Web service exposing RxTerms for autocomplete)
+```
+
+**Why We Use CTSS for Autocomplete:**
+1. **Performance**: Optimized for fast search/autocomplete
+2. **User Experience**: Returns clean, display-ready names
+3. **Reliability**: Same data source as RxNorm (NLM-maintained)
+4. **Completeness**: Includes RxCUI for each match
+
+**Why We Still Use RxNorm approximateTerm for Normalization:**
+1. **Confidence Scoring**: Provides match quality scores (0-100) for validation
+2. **Fuzzy Matching**: Better at handling misspellings and variations
+3. **Standardization**: Returns canonical RxNorm names for consistency
+
+### Optimization: Preserving RxCUI from Autocomplete
+
+**Problem Identified:**
+When users select a drug from autocomplete:
+1. CTSS already provides: `{ name: "Aspirin (Oral Pill)", rxcui: "12345", score: "100" }`
+2. We only store the name → `"Aspirin (Oral Pill)"`
+3. We discard the RxCUI
+4. On form submission, we re-normalize with RxNorm approximateTerm
+5. This can result in:
+   - Different match (RxNorm might match differently)
+   - Lower confidence score (unnecessary warning)
+   - Redundant API call
+
+**Solution:**
+Preserve RxCUI from autocomplete selection to skip redundant normalization.
+
+**Flow Chart:**
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ USER TYPES IN DRUG NAME FIELD                              │
+└────────────────────┬──────────────────────────────────────┘
+                     │
+                     ▼
+         ┌───────────────────────────┐
+         │  CTSS RxTerms API Call    │
+         │  (Primary Autocomplete)    │
+         └───────────┬───────────────┘
+                     │
+                     ▼
+         ┌───────────────────────────┐
+         │  Returns:                 │
+         │  - name: "Aspirin..."     │
+         │  - rxcui: "12345"         │
+         │  - score: "100"           │
+         └───────────┬───────────────┘
+                     │
+                     ▼
+         ┌───────────────────────────┐
+         │  User Selects from        │
+         │  Autocomplete Dropdown    │
+         └───────────┬───────────────┘
+                     │
+                     ▼
+    ┌────────────────┴────────────────┐
+    │  STORE BOTH:                    │
+    │  - drugName: "Aspirin..."       │
+    │  - rxcui: "12345" (NEW!)        │
+    └────────────────┬────────────────┘
+                     │
+                     ▼
+         ┌───────────────────────────┐
+         │  User Submits Form        │
+         └───────────┬───────────────┘
+                     │
+                     ▼
+    ┌────────────────┴────────────────┐
+    │  CHECK: Does RxCUI exist?       │
+    └────────────────┬────────────────┘
+                     │
+        ┌────────────┴────────────┐
+        │                         │
+        ▼                         ▼
+   YES (from        NO (user typed
+   autocomplete)    manually)
+        │                         │
+        ▼                         ▼
+┌───────────────┐        ┌──────────────────┐
+│ SKIP          │        │ CALL RxNorm      │
+│ Normalization │        │ approximateTerm  │
+│               │        │ (get RxCUI +     │
+│ Use existing  │        │ confidence)      │
+│ RxCUI         │        └────────┬─────────┘
+└───────┬───────┘                 │
+        │                         │
+        └────────────┬────────────┘
+                     │
+                     ▼
+         ┌───────────────────────────┐
+         │  Continue with FDA       │
+         │  Search using RxCUI       │
+         └───────────────────────────┘
+```
+
+**Benefits:**
+1. ✅ **Eliminates Redundant API Calls**: No need to re-normalize if RxCUI already exists
+2. ✅ **Prevents False Warnings**: Avoids low-confidence warnings for drugs already confirmed by CTSS
+3. ✅ **Faster Performance**: Skips normalization step when RxCUI is available
+4. ✅ **Better User Experience**: No confusing warnings for drugs user explicitly selected
+5. ✅ **Maintains Accuracy**: CTSS is RxNorm-based, so RxCUI is reliable
+
+**Implementation Details:**
+
+1. **Update `CalculatorFormData` interface:**
+   ```typescript
+   interface CalculatorFormData {
+     drugName: string;
+     rxcui?: string;  // NEW: Optional RxCUI from autocomplete
+     instructions: string;
+     daysSupply: number;
+   }
+   ```
+
+2. **Modify `DrugSearchInput.svelte`:**
+   - Store both `name` and `rxcui` when user selects from autocomplete
+   - Emit both values to parent component
+
+3. **Update `calculation.service.ts`:**
+   - Check if `rxcui` exists in input
+   - If yes: Skip normalization, use existing RxCUI
+   - If no: Call `normalizeDrugName()` as before
+
+**Edge Cases:**
+- **User types manually** (not from autocomplete): Normalize as before
+- **User edits after selection**: Clear RxCUI, normalize on submit
+- **CTSS fallback to approximateTerm**: Still get RxCUI, preserve it
+
+**Validation:**
+- ✅ CTSS RxCUI is reliable (same source as RxNorm)
+- ✅ No data loss (we still normalize if RxCUI missing)
+- ✅ Backward compatible (RxCUI is optional)
+
+### Implementation Status: ✅ COMPLETE
+
+**Completed:** 2025-11-12
+
+**Changes Made:**
+1. ✅ Updated `CalculatorFormData` interface to include optional `rxcui` field
+2. ✅ Modified `DrugSearchInput.svelte` to emit `rxcuiSelected` event when user selects from autocomplete
+3. ✅ Updated `CalculatorForm.svelte` to store RxCUI and clear it when user manually edits
+4. ✅ Updated `calculation.service.ts` to skip normalization if RxCUI already exists
+5. ✅ Updated validation schema to accept optional RxCUI
+
+**Files Modified:**
+- `src/lib/types/calculator.ts` - Added optional `rxcui` to `CalculationInput`
+- `src/lib/types/calculation.ts` - Added optional `rxcui` to `CalculationInput`
+- `src/lib/utils/calculator-validation.ts` - Added optional `rxcui` validation
+- `src/lib/components/calculator/DrugSearchInput.svelte` - Emit RxCUI on selection
+- `src/lib/components/calculator/CalculatorForm.svelte` - Handle RxCUI storage/clearing
+- `src/lib/services/calculation.service.ts` - Skip normalization if RxCUI exists
+
+**Benefits Realized:**
+- ✅ Eliminates redundant RxNorm API calls when RxCUI from autocomplete is available
+- ✅ Prevents false low-confidence warnings for drugs user explicitly selected
+- ✅ Faster calculation performance (skips normalization step)
+- ✅ Better user experience (no confusing warnings)
+
+---

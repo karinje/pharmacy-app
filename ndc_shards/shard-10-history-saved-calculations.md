@@ -1,12 +1,52 @@
 # SHARD 10: History & Saved Calculations
 
+**Status:** 🔄 PENDING
+
 ## Objective
 Implement calculation history storage, retrieval, search, and management with Firestore.
 
 ## Dependencies
-- Shard 2 (Authentication)
-- Shard 8 (Calculation Orchestration)
-- Shard 9 (Results Display)
+- ✅ Shard 2 (Authentication) - COMPLETED
+- ✅ Shard 8 (Calculation Orchestration) - COMPLETED
+- ✅ Shard 9 (Results Display) - COMPLETED
+
+## Context from Previous Shards
+
+### Completed Features (Shards 1-9)
+
+**Shard 1-2:** Project foundation, Firebase setup, authentication with email/password
+**Shard 3:** UI component library (shadcn-svelte) integrated
+**Shard 4:** Calculator form with drug autocomplete (CTSS RxTerms API)
+**Shard 5:** RxNorm API integration for drug normalization
+**Shard 6:** FDA NDC Directory API integration for product search
+**Shard 7:** OpenAI GPT-4o integration for instruction parsing, quantity calculation, package optimization
+**Shard 8:** Core calculation orchestration service
+**Shard 9:** Results display with:
+  - Calculation summary
+  - Recommended packages (sorted by: meets quantity → least waste → min bottles)
+  - Warning system (high priority at top, low/medium below summary)
+  - AI explanation
+  - Active/inactive product lists
+
+### Key Implementation Details
+
+1. **CalculationResult Type** (`src/lib/types/calculation.ts`):
+   - Contains: `id`, `input`, `rxnormData`, `allProducts`, `activeProducts`, `inactiveProducts`
+   - Contains: `parsing`, `quantity`, `optimization`, `explanation`, `warnings`, `timestamp`
+
+2. **ResultsCard Component** (`src/lib/components/results/ResultsCard.svelte`):
+   - Has `onSave` prop (currently shows alert, needs implementation)
+   - Displays full calculation results
+   - Has "Save to History" button that calls `onSave`
+
+3. **Firestore Structure**:
+   - Collections: `calculations` (for history)
+   - User ID from Firebase Auth (`context.auth.uid`)
+
+4. **Current State**:
+   - Calculator page: `src/routes/(authenticated)/calculator/+page.svelte`
+   - Results displayed via `ResultsCard` component
+   - Save button exists but not functional yet
 
 ## Files to Create/Modify
 

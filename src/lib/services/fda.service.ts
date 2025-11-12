@@ -313,21 +313,77 @@ class FDAService {
 	/**
 	 * Check if product is currently active
 	 */
-	private isProductActive(marketingStatus: string, expirationDate?: string): boolean {
-		// Check marketing status
-		if (marketingStatus !== 'Prescription' && marketingStatus !== 'Over-the-counter') {
-			return false;
-		}
-
-		// Check expiration date
-		if (expirationDate) {
-			const expDate = new Date(expirationDate);
-			if (expDate < new Date()) {
-				return false;
+	private isProductActive(marketingStatus: string | null | undefined, expirationDate?: string): boolean {
+		// If marketing status is null/undefined, check expiration date only
+		// Many FDA products have null marketing_status but are still active
+		if (!marketingStatus) {
+			// If no expiration date or expiration is in future, assume active
+			if (!expirationDate) {
+				return true; // No expiration = assume active
+			}
+			try {
+				const expDate = new Date(expirationDate);
+				const now = new Date();
+				// Allow 30 day grace period
+				return expDate >= new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+			} catch (e) {
+				// Bad date format = assume active
+				return true;
 			}
 		}
 
-		return true;
+		// Normalize marketing status for comparison
+		const status = marketingStatus.toLowerCase().trim();
+		
+		// Check marketing status - FDA returns various formats
+		// Accept: "Prescription", "Over-the-counter", "OTC", "RX", "Rx", etc.
+		const activeStatuses = [
+			'prescription',
+			'over-the-counter',
+			'over the counter',
+			'otc',
+			'rx',
+			'prescription only'
+		];
+		
+		const isActiveStatus = activeStatuses.some((active) => status.includes(active));
+		
+		// If status explicitly says inactive/discontinued, reject
+		const inactiveStatuses = ['discontinued', 'unapproved', 'withdrawn'];
+		if (inactiveStatuses.some((inactive) => status.includes(inactive))) {
+			return false;
+		}
+		
+		// If we have an active status, check expiration
+		if (isActiveStatus) {
+			// Check expiration date (if provided)
+			if (expirationDate) {
+				try {
+					const expDate = new Date(expirationDate);
+					const now = new Date();
+					// Allow 30 day grace period for expiration dates
+					if (expDate < new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)) {
+						return false;
+					}
+				} catch (e) {
+					// If date parsing fails, assume active
+					return true;
+				}
+			}
+			return true;
+		}
+
+		// Unknown status - if no expiration or future expiration, assume active
+		if (!expirationDate) {
+			return true;
+		}
+		try {
+			const expDate = new Date(expirationDate);
+			const now = new Date();
+			return expDate >= new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+		} catch (e) {
+			return true;
+		}
 	}
 
 	/**

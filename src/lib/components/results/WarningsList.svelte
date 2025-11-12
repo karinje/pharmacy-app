@@ -23,11 +23,25 @@
 
 {#if warnings.length > 0}
 	<div class="space-y-3">
-		<h3 class="text-lg font-semibold">Warnings & Notes</h3>
+		<h3 class="text-lg font-semibold">
+			{#if warnings.some(w => w.severity === 'high')}
+				⚠️ Important Warnings
+			{:else}
+				Important Notes
+			{/if}
+		</h3>
 		{#each sortedWarnings as warning}
 			<Alert variant={getVariant(warning.severity)}>
 				<svelte:component this={getIcon(warning.severity)} class="h-4 w-4" />
-				<AlertTitle class="capitalize">{warning.severity} Priority</AlertTitle>
+				<AlertTitle>
+					{#if warning.severity === 'high'}
+						⚠️ Important
+					{:else if warning.severity === 'medium'}
+						ℹ️ Note
+					{:else}
+						💡 Info
+					{/if}
+				</AlertTitle>
 				<AlertDescription>{warning.message}</AlertDescription>
 			</Alert>
 		{/each}

@@ -147,6 +147,8 @@ Return a JSON object with this EXACT structure:
       "cons": ["list disadvantages"]
     }
   ]
+
+CRITICAL: All alternatives MUST meet or exceed the required quantity. Do NOT include alternatives with insufficient quantities.
 }
 
 CRITICAL RULES:
@@ -188,14 +190,26 @@ Return ONLY the explanation text, no JSON.`;
 
 function parseJSONResponse<T>(response: string): T {
 	try {
+		if (!response || !response.trim()) {
+			throw new Error('Empty response from OpenAI');
+		}
+		
+		console.log('Parsing JSON response, length:', response.length);
+		console.log('Response preview:', response.substring(0, 200));
+		
 		// Remove markdown code blocks if present
 		const cleaned = response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-		return JSON.parse(cleaned) as T;
+		
+		const parsed = JSON.parse(cleaned) as T;
+		console.log('Successfully parsed JSON');
+		return parsed;
 	} catch (error) {
+		console.error('JSON parse error:', error);
+		console.error('Response that failed to parse:', response);
 		throw new functions.https.HttpsError(
 			'internal',
 			'Failed to parse OpenAI response as JSON',
-			{ response, error }
+			{ response, error: error instanceof Error ? error.message : String(error) }
 		);
 	}
 }
@@ -252,22 +266,89 @@ export const calculatePrescription = functions
 				warnings: string[];
 			}>(parsingCompletion.choices[0].message.content || '{}');
 
-			// Step 2: Calculate quantity
-			const dailyQuantity = parsing.dosageAmount * parsing.frequencyPerDay;
-			const totalQuantityNeeded = dailyQuantity * data.daysSupply;
+			// Step 2: Calculate quantity using GPT-5 with reasoning
+			const quantityPrompt = `Given the following prescription parsing, calculate the total quantity needed.
 
-			const quantity = {
-				dailyQuantity,
-				totalQuantityNeeded,
-				calculation: `${parsing.dosageAmount} ${parsing.dosageUnit}(s) × ${parsing.frequencyPerDay} times/day × ${data.daysSupply} days = ${totalQuantityNeeded} units`,
-				assumptions: parsing.isPRN ? ['PRN dosing - using maximum safe frequency'] : [],
-				uncertainties: parsing.warnings || []
-			};
+PARSING: ${JSON.stringify(parsing, null, 2)}
+DAYS SUPPLY: ${data.daysSupply} days
+
+Calculate:
+1. Daily quantity = dosage amount × frequency per day
+2. Total quantity = daily quantity × days supply
+
+Special considerations:
+- For insulin vials: Calculate units needed, then determine vials (typically 1000 units/vial)
+- For liquid medications: Consider concentration and volume
+- For PRN (as needed): Use maximum safe dosing frequency
+- For complex dosing: Break down step by step
+
+Return JSON:
+{
+  "dailyQuantity": number,
+  "totalQuantityNeeded": number,
+  "calculation": "step-by-step explanation showing your work",
+  "assumptions": [],
+  "uncertainties": []
+}
+
+IMPORTANT: Leave assumptions and uncertainties as empty arrays []. Do not populate them.
+
+DO NOT include any text before or after the JSON object.`;
+
+			// GPT-5 uses Responses API, not Chat Completions
+			const quantityResponse = await getOpenAIClient().responses.create({
+				model: 'gpt-5', // GPT-5 with embedded reasoning for accurate math calculations
+				input: `You are a pharmaceutical calculation expert. Always return valid JSON when requested. Show your mathematical work step by step.\n\n${quantityPrompt}`,
+				reasoning: {
+					effort: 'low'
+				},
+				max_output_tokens: 4000
+			});
+
+			// Log the full response to debug
+			console.log('GPT-5 Responses API response:', JSON.stringify(quantityResponse, null, 2));
+			
+			// GPT-5 Responses API structure:
+			// output is an array where:
+			// - output[0] is reasoning (type: "reasoning")
+			// - output[1] is the message (type: "message") with content array
+			// - content[0] has type: "output_text" and contains the text
+			let outputText = '';
+			const response = quantityResponse as any;
+			
+			if (response.output_text) {
+				// Direct output_text (if available)
+				outputText = response.output_text;
+			} else if (Array.isArray(response.output)) {
+				// Find the message output (skip reasoning)
+				const messageOutput = response.output.find((item: any) => item.type === 'message');
+				if (messageOutput && Array.isArray(messageOutput.content)) {
+					// Find the output_text content item
+					const textContent = messageOutput.content.find((item: any) => item.type === 'output_text');
+					if (textContent && textContent.text) {
+						outputText = textContent.text;
+					}
+				}
+			}
+			
+			console.log('Extracted output text:', outputText);
+			
+			if (!outputText) {
+				throw new Error('GPT-5 response did not contain output text. Response: ' + JSON.stringify(quantityResponse));
+			}
+
+			const quantity = parseJSONResponse<{
+				dailyQuantity: number;
+				totalQuantityNeeded: number;
+				calculation: string;
+				assumptions: string[];
+				uncertainties: string[];
+			}>(outputText);
 
 			// Step 3: Optimize packages with OpenAI
 			const optimizationPrompt = buildPackageOptimizerPrompt(
 				data.drugName,
-				totalQuantityNeeded,
+				quantity.totalQuantityNeeded,
 				data.availablePackages.map((p) => ({
 					ndc: p.ndc,
 					size: p.packageSize,

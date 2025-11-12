@@ -61,6 +61,8 @@ Return a JSON object with this EXACT structure:
       "cons": ["list disadvantages"]
     }
   ]
+
+CRITICAL: All alternatives MUST meet or exceed the required quantity. Do NOT include alternatives with insufficient quantities.
 }
 
 CRITICAL RULES:

@@ -6,14 +6,45 @@
 
 	export let optimization: PackageOptimization;
 	export let products: NDCProduct[];
+	export let totalQuantityNeeded: number;
 
 	function getProductDetails(ndc: string): NDCProduct | undefined {
 		return products.find((p) => p.ndc === ndc);
 	}
 
-	function getRankBadge(rank: number): { variant: 'default' | 'secondary' | 'outline'; label: string } {
-		if (rank === 1) return { variant: 'default', label: 'Best Option' };
-		if (rank === 2) return { variant: 'secondary', label: 'Alternative' };
+	// Calculate total bottles for a package recommendation
+	function getTotalBottles(pkg: PackageOptimization['recommendedPackages'][0]): number {
+		return pkg.quantity;
+	}
+
+	// Sort packages by: 1) meets quantity, 2) least waste, 3) minimum bottles
+	$: sortedPackages = [...optimization.recommendedPackages].sort((a, b) => {
+		// 1. Must meet or exceed required quantity
+		const aMeets = a.totalUnits >= totalQuantityNeeded;
+		const bMeets = b.totalUnits >= totalQuantityNeeded;
+		if (aMeets !== bMeets) {
+			return aMeets ? -1 : 1; // Meets requirement comes first
+		}
+
+		// 2. If both meet, sort by least waste (wasteUnits, then wastePercentage)
+		if (aMeets && bMeets) {
+			if (a.wasteUnits !== b.wasteUnits) {
+				return a.wasteUnits - b.wasteUnits; // Less waste first
+			}
+			if (a.wastePercentage !== b.wastePercentage) {
+				return a.wastePercentage - b.wastePercentage; // Less waste % first
+			}
+		}
+
+		// 3. If waste is equal, sort by minimum bottles
+		const aBottles = getTotalBottles(a);
+		const bBottles = getTotalBottles(b);
+		return aBottles - bBottles; // Fewer bottles first
+	});
+
+	function getRankBadge(index: number): { variant: 'default' | 'secondary' | 'outline'; label: string } {
+		if (index === 0) return { variant: 'default', label: 'Best Option' };
+		if (index === 1) return { variant: 'secondary', label: 'Alternative' };
 		return { variant: 'outline', label: 'Option' };
 	}
 </script>
@@ -25,9 +56,10 @@
 	</CardHeader>
 	<CardContent>
 		<div class="space-y-4">
-			{#each optimization.recommendedPackages as pkg}
+			{#each sortedPackages as pkg, index}
 				{@const product = getProductDetails(pkg.ndc)}
-				{@const rankInfo = getRankBadge(pkg.rank)}
+				{@const rankInfo = getRankBadge(index)}
+				{@const meetsRequirement = pkg.totalUnits >= totalQuantityNeeded}
 
 				<div class="border rounded-lg p-4">
 					<div class="flex items-start justify-between mb-2">
@@ -35,6 +67,9 @@
 							<Badge variant={rankInfo.variant}>{rankInfo.label}</Badge>
 							{#if !product?.isActive}
 								<Badge variant="destructive" class="ml-2">Inactive NDC</Badge>
+							{/if}
+							{#if !meetsRequirement}
+								<Badge variant="destructive" class="ml-2">Insufficient Quantity</Badge>
 							{/if}
 						</div>
 						<div class="text-right">

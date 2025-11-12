@@ -1,7 +1,6 @@
 <script lang="ts">
 	import CalculationSummary from './CalculationSummary.svelte';
 	import RecommendedPackages from './RecommendedPackages.svelte';
-	import AlternativeOptions from './AlternativeOptions.svelte';
 	import WarningsList from './WarningsList.svelte';
 	import ExplanationCard from './ExplanationCard.svelte';
 	import { Button } from '$lib/components/ui/button';
@@ -33,13 +32,18 @@
 		</div>
 	</div>
 
-	<!-- Warnings (if any) -->
-	{#if result.warnings.length > 0}
-		<WarningsList warnings={result.warnings} />
+	<!-- High Priority Warnings Only (at top) -->
+	{#if result.warnings.filter(w => w.severity === 'high').length > 0}
+		<WarningsList warnings={result.warnings.filter(w => w.severity === 'high')} />
 	{/if}
 
 	<!-- Calculation Summary -->
 	<CalculationSummary {result} />
+
+	<!-- Low/Medium Priority Info Notes (below summary) -->
+	{#if result.warnings.filter(w => w.severity !== 'high').length > 0}
+		<WarningsList warnings={result.warnings.filter(w => w.severity !== 'high')} />
+	{/if}
 
 	<!-- AI Explanation -->
 	<ExplanationCard explanation={result.explanation} />
@@ -48,32 +52,57 @@
 	<RecommendedPackages
 		optimization={result.optimization}
 		products={result.activeProducts}
+		totalQuantityNeeded={result.quantity.totalQuantityNeeded}
 	/>
-
-	<!-- Alternative Options -->
-	{#if result.optimization.alternatives.length > 0}
-		<AlternativeOptions optimization={result.optimization} />
-	{/if}
 
 	<!-- Additional Details -->
 	<details class="border rounded-lg p-4">
 		<summary class="cursor-pointer font-medium">
-			View All Available Products ({result.allProducts.length})
+			View All Available Products ({result.activeProducts.length} active, {result.inactiveProducts.length} inactive)
 		</summary>
-		<div class="mt-4 space-y-2">
-			{#each result.allProducts as product}
-				<div class="flex items-center justify-between text-sm">
-					<div>
-						<p class="font-medium">NDC: {product.ndc}</p>
-						<p class="text-muted-foreground">
-							{product.manufacturer} - {product.packageDescription}
-						</p>
+		<div class="mt-4 space-y-4">
+			<!-- Active Products -->
+			{#if result.activeProducts.length > 0}
+				<div>
+					<h4 class="font-semibold text-sm mb-2 text-green-600">
+						Active Products ({result.activeProducts.length})
+					</h4>
+					<div class="space-y-2 max-h-60 overflow-y-auto">
+						{#each result.activeProducts as product}
+							<div class="flex items-center justify-between text-sm p-2 rounded bg-green-50">
+								<div>
+									<p class="font-medium">NDC: {product.ndc}</p>
+									<p class="text-muted-foreground">
+										{product.manufacturer} - {product.packageDescription}
+									</p>
+								</div>
+							</div>
+						{/each}
 					</div>
-					{#if !product.isActive}
-						<span class="text-destructive">Inactive</span>
-					{/if}
 				</div>
-			{/each}
+			{/if}
+
+			<!-- Inactive Products (only show if there are any) -->
+			{#if result.inactiveProducts.length > 0}
+				<div>
+					<h4 class="font-semibold text-sm mb-2 text-destructive">
+						Inactive Products ({result.inactiveProducts.length}) - Excluded from Recommendations
+					</h4>
+					<div class="space-y-2 max-h-60 overflow-y-auto">
+						{#each result.inactiveProducts as product}
+							<div class="flex items-center justify-between text-sm p-2 rounded bg-red-50">
+								<div>
+									<p class="font-medium">NDC: {product.ndc}</p>
+									<p class="text-muted-foreground">
+										{product.manufacturer} - {product.packageDescription}
+									</p>
+								</div>
+								<span class="text-destructive text-xs">Inactive</span>
+							</div>
+						{/each}
+					</div>
+				</div>
+			{/if}
 		</div>
 	</details>
 </div>

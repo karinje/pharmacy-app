@@ -95,7 +95,7 @@ export const normalizeDrugName = functions
 						rxcui: c.rxcui || '',
 						name: c.name || '',
 						score: c.score || '0'
-					}))
+				}))
 			};
 
 			// Cache the result for 7 days (remove undefined values)

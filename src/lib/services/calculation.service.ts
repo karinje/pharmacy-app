@@ -16,24 +16,55 @@ class CalculationService {
 		const startTime = Date.now();
 
 		try {
-			// Stage 1: Normalize drug name with RxNorm
-			onProgress?.({
-				stage: 'normalizing',
-				message: 'Looking up drug in RxNorm database...',
-				progress: 10
-			});
+			// Stage 1: Normalize drug name with RxNorm (or use existing RxCUI from autocomplete)
+			let normalized: { rxcui: string; name: string; confidence: 'high' | 'medium' | 'low'; alternatives: Array<{ rxcui: string; name: string; score: string }> };
 
-			// Clean drug name before RxNorm (remove parentheticals)
-			const cleanedInput = input.drugName.replace(/\s*\([^)]*\)/g, '').trim();
-			const normalized = await rxnormService.normalizeDrugName(cleanedInput);
-
-			if (normalized.confidence === 'low') {
-				warnings.push({
-					type: 'rxnorm',
-					severity: 'medium',
-					message: `Low confidence match for "${input.drugName}". Using: ${normalized.name}`,
-					details: { alternatives: normalized.alternatives }
+			if (input.rxcui) {
+				// RxCUI already exists from autocomplete selection (CTSS or RxNorm)
+				// Skip normalization - CTSS is RxNorm-based, so RxCUI is reliable
+				onProgress?.({
+					stage: 'normalizing',
+					message: 'Using drug identifier from selection...',
+					progress: 10
 				});
+
+				// Get drug name from RxCUI (or use input name if available)
+				// For now, use the input drug name and trust the RxCUI
+				normalized = {
+					rxcui: input.rxcui,
+					name: input.drugName, // Use the name from autocomplete
+					confidence: 'high', // CTSS/RxNorm autocomplete is reliable
+					alternatives: []
+				};
+			} else {
+				// No RxCUI - user typed manually, need to normalize
+				onProgress?.({
+					stage: 'normalizing',
+					message: 'Looking up drug in RxNorm database...',
+					progress: 10
+				});
+
+				// Clean drug name before RxNorm (remove parentheticals)
+				const cleanedInput = input.drugName.replace(/\s*\([^)]*\)/g, '').trim();
+				const normalizedResult = await rxnormService.normalizeDrugName(cleanedInput);
+				normalized = normalizedResult;
+
+				// Only warn if confidence is low AND the matched name differs significantly from input
+				// (don't warn if we just cleaned parentheticals and got a good match)
+				const inputCleaned = cleanedInput.toLowerCase();
+				const matchedCleaned = normalized.name.toLowerCase();
+				const namesMatch = inputCleaned === matchedCleaned || 
+				                   matchedCleaned.includes(inputCleaned) || 
+				                   inputCleaned.includes(matchedCleaned);
+				
+				if (normalized.confidence === 'low' && !namesMatch) {
+					warnings.push({
+						type: 'rxnorm',
+						severity: 'low',
+						message: `Drug name "${input.drugName}" matched to "${normalized.name}" with lower confidence. Please verify this is correct.`,
+						details: { alternatives: normalized.alternatives }
+					});
+				}
 			}
 
 			// Stage 2: Fetch NDC products from FDA
@@ -61,12 +92,15 @@ class CalculationService {
 				});
 			}
 
-			// Only warn about inactive NDCs if we have active ones too (otherwise it's redundant with the "no active" warning)
-			if (inactiveProducts.length > 0 && activeProducts.length > 0) {
+			// Only warn about inactive NDCs if there are many (>50) and they represent significant portion (>30%)
+			// This avoids noise for small numbers, but alerts when database has many outdated codes
+			const totalProducts = allProducts.length;
+			const inactiveRatio = inactiveProducts.length / totalProducts;
+			if (inactiveProducts.length > 50 && inactiveRatio > 0.3 && activeProducts.length > 0) {
 				warnings.push({
 					type: 'inactive_ndc',
-					severity: 'medium',
-					message: `${inactiveProducts.length} inactive NDC(s) found in database`,
+					severity: 'low',
+					message: `Large number of inactive product codes (${inactiveProducts.length}) found in database. Only active products are shown in recommendations.`,
 					details: { inactive: inactiveProducts.map((p) => p.ndc) }
 				});
 			}
@@ -130,6 +164,20 @@ class CalculationService {
 			// Generate unique ID
 			const id = `calc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
+			// Filter out alternatives that don't meet quantity requirements
+			const validOptimization = {
+				...openaiResult.optimization,
+				alternatives: openaiResult.optimization.alternatives.filter((alt) => {
+					// Calculate total units for this alternative
+					const totalUnits = alt.packages.reduce((sum, pkg) => {
+						const product = activeProducts.find((p) => p.ndc === pkg.ndc);
+						return sum + (product ? product.packageSize * pkg.quantity : 0);
+					}, 0);
+					// Only keep alternatives that meet or exceed required quantity
+					return totalUnits >= openaiResult.quantity.totalQuantityNeeded;
+				})
+			};
+
 			const result: CalculationResult = {
 				id,
 				input,
@@ -143,7 +191,7 @@ class CalculationService {
 				inactiveProducts,
 				parsing: openaiResult.parsing,
 				quantity: openaiResult.quantity,
-				optimization: openaiResult.optimization,
+				optimization: validOptimization,
 				explanation,
 				warnings: this.sortWarnings(warnings),
 				timestamp: new Date()

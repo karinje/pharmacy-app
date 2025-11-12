@@ -1,5 +1,7 @@
 # SHARD 9: Results Display & Explanation
 
+**Status:** ✅ COMPLETED
+
 ## Objective
 Create comprehensive results display with NDC recommendations, explanations, warnings, and alternative options.
 
@@ -469,6 +471,31 @@ src/
 - [ ] Layout responsive on mobile
 - [ ] Information hierarchy clear
 
+## Implementation Notes
+
+### Key Features Implemented
+
+1. **Warning System**
+   - High priority warnings shown at top (e.g., "No active NDC products")
+   - Low/medium info notes shown below calculation summary
+   - Filtered out generic GPT-5 uncertainties (e.g., "Real-world adherence may vary")
+   - GPT-5 prompt updated to not generate assumptions/uncertainties
+
+2. **Package Sorting Logic**
+   - Sorted by: 1) Meets required quantity, 2) Least waste, 3) Minimum bottles
+   - Only shows packages that meet or exceed required quantity
+   - Badge shows "Insufficient Quantity" if doesn't meet requirement
+
+3. **UI Improvements**
+   - Removed redundant "Alternative Options" section (was duplicate of Recommended Packages)
+   - Separated active/inactive products in collapsible sections
+   - Clear visual hierarchy with high-priority warnings at top
+
+4. **GPT-5 Integration**
+   - Uses Responses API (`/v1/responses`) not Chat Completions
+   - Extracts text from nested response structure: `output[1].content[0].text`
+   - Reasoning effort set to 'low' for faster responses
+
 ## Success Criteria
 
 ✅ Complete results UI implemented  
@@ -476,6 +503,9 @@ src/
 ✅ Clear visual hierarchy  
 ✅ Responsive design  
 ✅ Accessible components  
-✅ Professional appearance
+✅ Professional appearance  
+✅ Warning filtering implemented  
+✅ Package sorting logic implemented  
+✅ Alternative Options section removed (redundant)
 
 ---

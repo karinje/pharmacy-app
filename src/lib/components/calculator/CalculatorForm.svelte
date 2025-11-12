@@ -17,6 +17,7 @@
 
 	let formData: CalculatorFormData = {
 		drugName: '',
+		rxcui: undefined,
 		instructions: '',
 		daysSupply: 30
 	};
@@ -56,6 +57,7 @@
 	function handleReset() {
 		formData = {
 			drugName: '',
+			rxcui: undefined,
 			instructions: '',
 			daysSupply: 30
 		};
@@ -80,6 +82,17 @@
 					bind:value={formData.drugName}
 					error={errors.drugName}
 					disabled={isSubmitting}
+					on:rxcuiSelected={(e) => {
+						formData.rxcui = e.detail.rxcui;
+						// Ensure drug name matches (in case of slight differences)
+						if (e.detail.name && e.detail.name !== formData.drugName) {
+							formData.drugName = e.detail.name;
+						}
+					}}
+					on:drugNameChanged={() => {
+						// Clear RxCUI when user manually edits (not from autocomplete)
+						formData.rxcui = undefined;
+					}}
 				/>
 
 				<InstructionsInput

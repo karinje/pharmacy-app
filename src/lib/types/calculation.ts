@@ -3,6 +3,7 @@ import type { InstructionParsing, QuantityCalculation, PackageOptimization } fro
 
 export interface CalculationInput {
 	drugName: string;
+	rxcui?: string; // Optional RxCUI from autocomplete selection (CTSS/RxNorm)
 	instructions: string;
 	daysSupply: number;
 }
