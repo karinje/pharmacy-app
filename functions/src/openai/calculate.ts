@@ -185,7 +185,7 @@ function parseJSONResponse<T>(response: string): T {
 	try {
 		// Remove markdown code blocks if present
 		const cleaned = response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-		return JSON.parse(cleaned);
+		return JSON.parse(cleaned) as T;
 	} catch (error) {
 		throw new functions.https.HttpsError(
 			'internal',
@@ -234,9 +234,17 @@ export const calculatePrescription = functions
 				max_tokens: 1000
 			});
 
-			const parsing = parseJSONResponse(
-				parsingCompletion.choices[0].message.content || '{}'
-			);
+			const parsing = parseJSONResponse<{
+				dosageAmount: number;
+				dosageUnit: string;
+				frequency: string;
+				frequencyPerDay: number;
+				specialInstructions?: string;
+				isPRN: boolean;
+				confidence: 'high' | 'medium' | 'low';
+				reasoning: string;
+				warnings: string[];
+			}>(parsingCompletion.choices[0].message.content || '{}');
 
 			// Step 2: Calculate quantity
 			const dailyQuantity = parsing.dosageAmount * parsing.frequencyPerDay;

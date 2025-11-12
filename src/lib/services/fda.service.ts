@@ -78,8 +78,8 @@ class FDAService {
 		// Remove parenthetical content like "(Oral Pill)", "(Tablet)", etc.
 		let cleaned = name.replace(/\s*\([^)]*\)/g, '').trim();
 		
-		// Remove common suffixes that aren't part of generic name
-		cleaned = cleaned.replace(/\s+(Oral|Pill|Tablet|Capsule|Injection|Solution)\s*$/i, '');
+		// Remove common suffixes that aren't part of generic name (case-insensitive, word boundary)
+		cleaned = cleaned.replace(/\s+(Oral|Pill|Tablet|Capsule|Injection|Solution|Oral Pill)\s*$/i, '').trim();
 		
 		// Convert to lowercase for consistent searching
 		return cleaned.toLowerCase();

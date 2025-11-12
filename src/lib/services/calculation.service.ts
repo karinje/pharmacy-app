@@ -23,7 +23,9 @@ class CalculationService {
 				progress: 10
 			});
 
-			const normalized = await rxnormService.normalizeDrugName(input.drugName);
+			// Clean drug name before RxNorm (remove parentheticals)
+			const cleanedInput = input.drugName.replace(/\s*\([^)]*\)/g, '').trim();
+			const normalized = await rxnormService.normalizeDrugName(cleanedInput);
 
 			if (normalized.confidence === 'low') {
 				warnings.push({
@@ -59,7 +61,8 @@ class CalculationService {
 				});
 			}
 
-			if (inactiveProducts.length > 0) {
+			// Only warn about inactive NDCs if we have active ones too (otherwise it's redundant with the "no active" warning)
+			if (inactiveProducts.length > 0 && activeProducts.length > 0) {
 				warnings.push({
 					type: 'inactive_ndc',
 					severity: 'medium',

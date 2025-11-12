@@ -223,31 +223,36 @@ DO NOT include any text before or after the JSON object.`;
 			optimization
 		);
 
-		// Compile warnings
+		// Compile warnings (filter out empty/null warnings)
 		const warnings: Array<{
 			type: string;
 			severity: 'high' | 'medium' | 'low';
 			message: string;
 		}> = [
-			...parsing.warnings.map((w) => ({
-				type: 'parsing',
-				severity: 'medium' as const,
-				message: w
-			})),
-			...quantity.uncertainties.map((u) => ({
-				type: 'calculation',
-				severity: 'low' as const,
-				message: u
-			}))
+			...parsing.warnings
+				.filter((w) => w && w.trim() && w.toLowerCase() !== 'none')
+				.map((w) => ({
+					type: 'parsing',
+					severity: 'medium' as const,
+					message: w
+				})),
+			...quantity.uncertainties
+				.filter((u) => u && u.trim() && u.toLowerCase() !== 'none')
+				.map((u) => ({
+					type: 'calculation',
+					severity: 'low' as const,
+					message: u
+				}))
 		];
 
-		// Check for inactive NDCs
+		// Check for inactive NDCs (only if we have active ones too, to avoid duplicate warnings)
 		const hasInactiveNDCs = request.availablePackages.some((p) => !p.isActive);
-		if (hasInactiveNDCs) {
+		const hasActiveNDCs = request.availablePackages.some((p) => p.isActive);
+		if (hasInactiveNDCs && hasActiveNDCs) {
 			warnings.push({
 				type: 'inactive_ndc',
-				severity: 'high' as const,
-				message: 'Some NDC codes in the database are inactive and should not be used'
+				severity: 'medium' as const,
+				message: 'Some NDC codes in the database are inactive and have been filtered out'
 			});
 		}
 
