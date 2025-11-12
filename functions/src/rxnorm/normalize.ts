@@ -98,12 +98,18 @@ export const normalizeDrugName = functions
 					}))
 			};
 
-			// Cache the result for 7 days
-			await cacheRef.set({
-				data: result,
+			// Cache the result for 7 days (remove undefined values)
+			const cacheData: any = {
+				data: {
+					rxcui: result.rxcui,
+					name: result.name,
+					confidence: result.confidence,
+					alternatives: result.alternatives.filter((alt) => alt.rxcui && alt.name && alt.score)
+				},
 				expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000,
 				createdAt: admin.firestore.FieldValue.serverTimestamp()
-			}, { ignoreUndefinedProperties: true });
+			};
+			await cacheRef.set(cacheData);
 
 			return result;
 		} catch (error) {
