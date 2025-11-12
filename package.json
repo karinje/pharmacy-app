@@ -15,7 +15,13 @@
     "test:ui": "vitest --ui",
     "test:coverage": "vitest --coverage",
     "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui"
+    "test:e2e:ui": "playwright test --ui",
+    "deploy": "npm run build && firebase deploy",
+    "deploy:hosting": "npm run build && firebase deploy --only hosting",
+    "deploy:functions": "firebase deploy --only functions",
+    "deploy:rules": "firebase deploy --only firestore:rules,storage",
+    "deploy:staging": "npm run build && firebase use staging && firebase deploy",
+    "deploy:preview": "firebase hosting:channel:deploy preview"
   },
   "dependencies": {
     "@internationalized/date": "^3.5.0",
