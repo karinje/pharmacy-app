@@ -85,14 +85,17 @@ export const normalizeDrugName = functions
 			const score = parseInt(bestMatch.score);
 
 			const result: NormalizeResponse = {
-				rxcui: bestMatch.rxcui,
-				name: bestMatch.name,
+				rxcui: bestMatch.rxcui || '',
+				name: bestMatch.name || '',
 				confidence: score >= 90 ? 'high' : score >= 70 ? 'medium' : 'low',
-				alternatives: rxnormData.approximateGroup.candidate.slice(1, 5).map((c: any) => ({
-					rxcui: c.rxcui,
-					name: c.name,
-					score: c.score
-				}))
+				alternatives: rxnormData.approximateGroup.candidate
+					.slice(1, 5)
+					.filter((c: any) => c && c.rxcui && c.name && c.score)
+					.map((c: any) => ({
+						rxcui: c.rxcui || '',
+						name: c.name || '',
+						score: c.score || '0'
+					}))
 			};
 
 			// Cache the result for 7 days
@@ -100,7 +103,7 @@ export const normalizeDrugName = functions
 				data: result,
 				expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000,
 				createdAt: admin.firestore.FieldValue.serverTimestamp()
-			});
+			}, { ignoreUndefinedProperties: true });
 
 			return result;
 		} catch (error) {
