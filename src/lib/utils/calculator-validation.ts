@@ -5,7 +5,7 @@ export const calculatorFormSchema = z.object({
 		.string()
 		.min(2, 'Drug name must be at least 2 characters')
 		.max(200, 'Drug name is too long')
-		.regex(/^[a-zA-Z0-9\s\-]+$/, 'Drug name contains invalid characters'),
+		.regex(/^[a-zA-Z0-9\s\-()]+$/, 'Drug name contains invalid characters'),
 
 	instructions: z
 		.string()

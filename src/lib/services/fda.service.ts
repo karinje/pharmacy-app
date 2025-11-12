@@ -72,30 +72,67 @@ class FDAService {
 	}
 
 	/**
+	 * Clean drug name for FDA search - remove parentheticals, extra descriptors
+	 */
+	private cleanDrugNameForSearch(name: string): string {
+		// Remove parenthetical content like "(Oral Pill)", "(Tablet)", etc.
+		let cleaned = name.replace(/\s*\([^)]*\)/g, '').trim();
+		
+		// Remove common suffixes that aren't part of generic name
+		cleaned = cleaned.replace(/\s+(Oral|Pill|Tablet|Capsule|Injection|Solution)\s*$/i, '');
+		
+		// Convert to lowercase for consistent searching
+		return cleaned.toLowerCase();
+	}
+
+	/**
 	 * Get active NDCs for a drug by generic name
 	 */
 	async searchNDCsByDrugName(genericName: string): Promise<NDCProduct[]> {
-		const cacheKey = `fda:search:${genericName.toLowerCase()}`;
+		// Clean the name for search
+		const cleanedName = this.cleanDrugNameForSearch(genericName);
+		const cacheKey = `fda:search:${cleanedName}`;
 
 		const cached = cacheService.get<NDCProduct[]>(cacheKey);
 		if (cached) return cached;
 
 		try {
-			// Build FDA API query
-			const query = `generic_name:"${genericName}"`;
-			const params = {
+			// Try exact match first
+			let query = `generic_name:"${cleanedName}"`;
+			let params = {
 				search: query,
 				limit: this.resultsLimit
 			};
 
-			const queryString = buildQueryString(params);
-			const url = `${this.baseUrl}?${queryString}`;
+			let queryString = buildQueryString(params);
+			let url = `${this.baseUrl}?${queryString}`;
 
-			const response = await retryWithBackoff(async () => {
+			let response = await retryWithBackoff(async () => {
 				return fetchWithTimeout(url);
 			});
 
-			const data: FDASearchResponse = await response.json();
+			let data: FDASearchResponse = await response.json();
+
+			// If no results, try with just the first word (base drug name)
+			if (!data.results || data.results.length === 0) {
+				const firstWord = cleanedName.split(/\s+/)[0];
+				if (firstWord && firstWord !== cleanedName) {
+					console.log(`No results for "${cleanedName}", trying base name: "${firstWord}"`);
+					query = `generic_name:"${firstWord}"`;
+					params = {
+						search: query,
+						limit: this.resultsLimit
+					};
+					queryString = buildQueryString(params);
+					url = `${this.baseUrl}?${queryString}`;
+
+					response = await retryWithBackoff(async () => {
+						return fetchWithTimeout(url);
+					});
+
+					data = await response.json();
+				}
+			}
 
 			if (!data.results || data.results.length === 0) {
 				return [];

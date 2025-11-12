@@ -13,7 +13,25 @@ export interface RxNormConcept {
 }
 
 // Re-export FDA types (comprehensive NDCProduct definition)
+import type { NDCProduct } from './fda';
 export type { NDCProduct, FDANDCResult, FDAIngredient, FDAPackaging, FDASearchResponse } from './fda';
+
+// Re-export OpenAI types
+export type {
+	InstructionParsing,
+	QuantityCalculation,
+	PackageOptimization,
+	OpenAICalculationRequest,
+	OpenAICalculationResponse
+} from './openai';
+
+// Re-export Calculation types
+export type {
+	CalculationInput,
+	CalculationResult,
+	CalculationProgress,
+	Warning
+} from './calculation';
 
 // Legacy NDCProduct interface - deprecated, use FDA NDCProduct instead
 /** @deprecated Use NDCProduct from './fda' instead */
@@ -29,20 +47,23 @@ export interface LegacyNDCProduct {
   expirationDate?: string;
 }
 
-export interface CalculationResult {
+// Legacy types - deprecated, use types from './calculation' instead
+/** @deprecated Use CalculationResult from './calculation' instead */
+export interface LegacyCalculationResult {
   id: string;
   input: DrugInput;
   rxnormData: RxNormConcept;
   totalQuantityNeeded: number;
-  recommendedPackages: PackageRecommendation[];
+  recommendedPackages: LegacyPackageRecommendation[];
   allNDCs: NDCProduct[];
   explanation: string;
-  warnings: Warning[];
-  alternatives: Alternative[];
+  warnings: LegacyWarning[];
+  alternatives: LegacyAlternative[];
   timestamp: Date;
 }
 
-export interface PackageRecommendation {
+/** @deprecated Use PackageRecommendation from './calculation' instead */
+export interface LegacyPackageRecommendation {
   ndc: string;
   product: NDCProduct;
   quantity: number;
@@ -53,15 +74,17 @@ export interface PackageRecommendation {
   reasoning: string;
 }
 
-export interface Warning {
+/** @deprecated Use Warning from './calculation' instead */
+export interface LegacyWarning {
   type: 'inactive_ndc' | 'quantity_mismatch' | 'package_unavailable' | 'ambiguous_instruction';
   severity: 'high' | 'medium' | 'low';
   message: string;
 }
 
-export interface Alternative {
+/** @deprecated Use Alternative from './calculation' instead */
+export interface LegacyAlternative {
   description: string;
-  packages: PackageRecommendation[];
+  packages: LegacyPackageRecommendation[];
   pros: string[];
   cons: string[];
 }
@@ -77,7 +100,7 @@ export interface User {
 
 export interface CalculationHistory {
   userId: string;
-  calculations: CalculationResult[];
+  calculations: LegacyCalculationResult[];
   totalCalculations: number;
   lastUpdated: Date;
 }

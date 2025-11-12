@@ -1,15 +1,19 @@
 import { writable, derived } from 'svelte/store';
-import type { CalculatorState, CalculationRequest } from '$lib/types/calculator';
+import type { CalculationResult, CalculationProgress } from '$lib/types/calculation';
+import type { CalculatorFormData } from '$lib/types/calculator';
+
+interface CalculatorState {
+	result: CalculationResult | null;
+	progress: CalculationProgress | null;
+	isCalculating: boolean;
+	error: string | null;
+}
 
 function createCalculatorStore() {
 	const initialState: CalculatorState = {
-		input: {
-			drugName: '',
-			instructions: '',
-			daysSupply: 30
-		},
-		isCalculating: false,
 		result: null,
+		progress: null,
+		isCalculating: false,
 		error: null
 	};
 
@@ -18,22 +22,20 @@ function createCalculatorStore() {
 	return {
 		subscribe,
 
-		setInput: (input: Partial<CalculatorState['input']>) => {
-			update((state) => ({
-				...state,
-				input: { ...state.input, ...input }
-			}));
-		},
-
 		setCalculating: (isCalculating: boolean) => {
-			update((state) => ({ ...state, isCalculating }));
+			update((state) => ({ ...state, isCalculating, error: null }));
 		},
 
-		setResult: (result: CalculatorState['result']) => {
+		setProgress: (progress: CalculationProgress) => {
+			update((state) => ({ ...state, progress }));
+		},
+
+		setResult: (result: CalculationResult) => {
 			update((state) => ({
 				...state,
 				result,
 				isCalculating: false,
+				progress: null,
 				error: null
 			}));
 		},
@@ -43,20 +45,13 @@ function createCalculatorStore() {
 				...state,
 				error,
 				isCalculating: false,
+				progress: null,
 				result: null
 			}));
 		},
 
 		reset: () => {
 			set(initialState);
-		},
-
-		clearResult: () => {
-			update((state) => ({
-				...state,
-				result: null,
-				error: null
-			}));
 		}
 	};
 }
@@ -64,11 +59,8 @@ function createCalculatorStore() {
 export const calculatorStore = createCalculatorStore();
 
 // Derived stores
-export const calculatorInput = derived(calculatorStore, ($store) => $store.input);
-
-export const isCalculating = derived(calculatorStore, ($store) => $store.isCalculating);
-
 export const calculationResult = derived(calculatorStore, ($store) => $store.result);
-
+export const isCalculating = derived(calculatorStore, ($store) => $store.isCalculating);
+export const calculationProgress = derived(calculatorStore, ($store) => $store.progress);
 export const calculationError = derived(calculatorStore, ($store) => $store.error);
 

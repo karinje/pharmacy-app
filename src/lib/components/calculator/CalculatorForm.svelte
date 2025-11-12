@@ -30,16 +30,19 @@
 		formData.daysSupply <= 365;
 
 	function handleSubmit() {
+		console.log('Form handleSubmit called, formData:', formData);
 		// Clear previous errors
 		errors = {};
 
 		try {
 			// Validate form data
 			const validated = calculatorFormSchema.parse(formData);
+			console.log('Form validation passed, dispatching submit:', validated);
 
 			// Dispatch submit event
 			dispatch('submit', validated);
 		} catch (error: any) {
+			console.error('Form validation failed:', error);
 			// Handle validation errors
 			if (error.errors) {
 				error.errors.forEach((err: any) => {
@@ -62,14 +65,6 @@
 </script>
 
 <div class="space-y-6">
-	<!-- Page Header -->
-	<div>
-		<h1 class="text-4xl font-bold mb-3">NDC Package Calculator</h1>
-		<p class="text-lg text-muted-foreground">
-			Enter prescription details to find the optimal NDC packaging
-		</p>
-	</div>
-
 	<!-- Form Card -->
 	<Card>
 		<CardHeader>
