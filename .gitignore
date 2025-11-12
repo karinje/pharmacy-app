@@ -15,4 +15,8 @@ ui-debug.log
 *.log
 dist
 .cache
+coverage
+test-results
+playwright-report
+.vitest
 
