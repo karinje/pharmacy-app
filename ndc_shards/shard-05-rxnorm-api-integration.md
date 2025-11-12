@@ -1,6 +1,6 @@
 # SHARD 5: RxNorm API Integration
 
-## Status: 🔜 READY TO START
+## Status: ✅ COMPLETE
 
 ## Objective
 Integrate RxNorm API for drug name normalization and RxCUI lookup, with caching and error handling.
@@ -647,16 +647,16 @@ export { normalizeDrugName } from './rxnorm/normalize';
 
 ## Validation Checklist
 
-- [ ] RxNorm API calls successful for drug normalization
-- [ ] Caching service stores and retrieves data correctly
-- [ ] Cache expires after configured TTL
-- [ ] API errors are handled gracefully
-- [ ] Retry logic works for failed requests
-- [ ] Cloud Function deploys successfully
-- [ ] Cloud Function is callable from client
-- [ ] Drug search autocomplete returns results
-- [ ] NDC lookup works for RxCUI
-- [ ] Firestore cache is created and used
+- [x] RxNorm API calls successful for drug normalization
+- [x] Caching service stores and retrieves data correctly
+- [x] Cache expires after configured TTL
+- [x] API errors are handled gracefully
+- [x] Retry logic works for failed requests
+- [x] Cloud Function deploys successfully
+- [x] Cloud Function is callable from client
+- [x] Drug search autocomplete returns results
+- [x] NDC lookup works for RxCUI
+- [x] Firestore cache is created and used
 
 ## Success Criteria
 
@@ -666,5 +666,47 @@ export { normalizeDrugName } from './rxnorm/normalize';
 ✅ Error handling comprehensive  
 ✅ Retry logic with backoff working  
 ✅ All RxNorm endpoints accessible
+
+## Completion Notes
+
+**Completed:** 2025-11-12
+
+**Implementation Summary:**
+- ✅ Integrated CTSS RxTerms API (`clinicaltables.nlm.nih.gov/api/rxterms/v3/search`) as primary autocomplete endpoint
+- ✅ Implemented Firebase Cloud Functions (`normalizeDrugName`, `searchDrugs`) with Firestore caching
+- ✅ Created client-side RxNorm service using `httpsCallable` for secure API access
+- ✅ Implemented client-side caching service with TTL support
+- ✅ Added comprehensive error handling with `ApiError` class
+- ✅ Integrated autocomplete in `DrugSearchInput.svelte` with debouncing (300ms) and race condition prevention
+- ✅ Fixed CTSS response parsing (handles nested array format: `[["ADVIL (Oral Liquid)"], ...]`)
+- ✅ Added source tracking to identify which API was used (CTSS vs approximateTerm fallback)
+
+**Key Files Created:**
+- `src/lib/types/rxnorm.ts` - TypeScript interfaces for RxNorm responses
+- `src/lib/utils/api-helpers.ts` - HTTP helpers (fetchWithTimeout, retryWithBackoff, ApiError)
+- `src/lib/services/cache.service.ts` - Generic client-side caching service
+- `src/lib/services/rxnorm.service.ts` - RxNorm API client (uses Cloud Functions)
+- `functions/src/rxnorm/normalize.ts` - Cloud Functions for RxNorm (normalizeDrugName, searchDrugs)
+
+**Key Files Modified:**
+- `src/lib/components/calculator/DrugSearchInput.svelte` - Replaced static list with live RxNorm search
+- `functions/src/index.ts` - Exported RxNorm functions
+- `functions/package.json` - Updated Node.js to v20
+
+**API Endpoints Used:**
+- Primary: CTSS RxTerms (`/api/rxterms/v3/search`) - Purpose-built for autocomplete
+- Fallback: RxNorm `approximateTerm.json` - For fuzzy matching when CTSS returns 0 results
+
+**Performance:**
+- Client-side cache: 1 hour TTL for search results
+- Server-side cache: 1 hour TTL for search, 7 days for normalization
+- Search works with 3+ characters
+- Debounce: 300ms to limit API calls
+
+**Testing:**
+- ✅ Verified with "advil", "metformin", "meth", "aspirin", "ibuprofen"
+- ✅ Confirmed CTSS API returns clean display names with RxCUI
+- ✅ Verified fallback to approximateTerm works when CTSS returns 0 results
+- ✅ Confirmed caching reduces redundant API calls
 
 ---

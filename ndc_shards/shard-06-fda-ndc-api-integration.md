@@ -1,11 +1,40 @@
 # SHARD 6: FDA NDC API Integration
 
+## Status: 🔜 READY TO START
+
 ## Objective
 Integrate FDA NDC Directory API for product validation and package information retrieval.
 
 ## Dependencies
-- Shard 1 (Project Foundation)
-- Shard 5 (RxNorm Integration)
+- ✅ Shard 1 (Project Foundation) - COMPLETE
+- ✅ Shard 5 (RxNorm Integration) - COMPLETE
+
+## Context from Shard 5
+
+**Completed RxNorm Integration:**
+- `rxnorm.service.ts` - Client-side service using Firebase Cloud Functions
+- `normalizeDrugName` Cloud Function - Normalizes drug names to RxCUI
+- `searchDrugs` Cloud Function - Autocomplete search using CTSS RxTerms API
+- `cache.service.ts` - Generic client-side caching with TTL
+- `api-helpers.ts` - HTTP helpers (fetchWithTimeout, retryWithBackoff, ApiError)
+- Firestore caching on server-side (1 hour for search, 7 days for normalization)
+
+**Available from RxNorm:**
+- `NormalizedDrug` interface with `rxcui`, `name`, `confidence`, `alternatives`
+- `RxNormCandidate` interface for autocomplete results
+- RxCUI available for NDC lookup (RxNorm can provide NDCs for RxCUI, but FDA API is more comprehensive)
+
+**Integration Points:**
+- Use RxCUI from normalized drug name to search FDA NDC Directory
+- FDA API provides more detailed package information than RxNorm NDC endpoint
+- FDA API validates NDC codes and provides active/inactive status
+- FDA API includes package size, manufacturer, marketing status
+
+**Next Steps:**
+- Create FDA service to search NDCs by generic name (from RxNorm)
+- Validate NDC codes from user input or calculation results
+- Get package information (size, unit, manufacturer) for NDC matching
+- Filter active vs inactive products
 
 ## Files to Create/Modify
 
