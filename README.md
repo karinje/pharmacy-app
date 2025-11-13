@@ -142,10 +142,9 @@ This is an **AI-first application** where GPT-4o makes all intelligent decisions
 
 ## Normalization Flow Overview
 
-The app performs two types of normalization to ensure accurate prescription calculations:
+The app performs drug name normalization to ensure accurate prescription calculations:
 
-1. **Drug Name Normalization**: Converts drug names (brand, generic, misspellings) to standardized RxCUI identifiers via RxNorm API
-2. **NDC Code Normalization**: Converts NDC codes from various formats to standard 11-digit format
+**Drug Name Normalization**: Converts drug names (brand, generic, misspellings) to standardized RxCUI identifiers via RxNorm API
 
 ### Flow Summary
 
@@ -158,7 +157,6 @@ The app performs two types of normalization to ensure accurate prescription calc
 **Both paths converge:**
 - Get ingredient name from RxNorm (optional)
 - Search FDA with 6 strategies until success
-- Normalize NDC codes to 11-digit format
 - Filter active vs inactive products
 - OpenAI: Parse instructions → Calculate quantity → Optimize packages → Generate explanation
 
@@ -200,32 +198,16 @@ graph TB
     
     %% Converge at FDA Search
     HasRxCUI --> IngredientLookup[Get ingredient name<br/>RxNorm Related Concepts API<br/>/rxcui/RxCUI/related.json]
-    IngredientLookup --> FDASearch[Step 2: Get All NDCs<br/>FDA NDC Directory API]
+    IngredientLookup --> FDASearch[Step 2: FDA NDC Search<br/>api.fda.gov/drug/ndc.json<br/>Tries 6 strategies sequentially:<br/>1. Exact with quotes<br/>2. Without quotes<br/>3. Brand name<br/>4. First word<br/>5. Uppercase<br/>6. Ingredient name]
     
-    %% FDA Search with multiple strategies
-    FDASearch --> FDAStrategy1[FDA API: Strategy 1<br/>generic_name:metformin]
-    FDAStrategy1 --> FDAStrategy2[Strategy 2: Without quotes]
-    FDAStrategy2 --> FDAStrategy3[Strategy 3: Brand name]
-    FDAStrategy3 --> FDAStrategy4[Strategy 4: First word]
-    FDAStrategy4 --> FDAStrategy5[Strategy 5: Uppercase]
-    FDAStrategy5 --> FDAStrategy6[Strategy 6: Ingredient name]
-    FDAStrategy6 --> FDAFound[Returns 50+ NDC products<br/>api.fda.gov/drug/ndc.json]
+    FDASearch --> FDAFound[Returns 50+ NDC products<br/>api.fda.gov/drug/ndc.json]
     
-    %% NDC Normalization
-    FDAFound --> NormalizeNDC[Step 3: Normalize NDC Codes<br/>Convert formats to 11-digit<br/>12345-678-90 → 12345678900]
-    NormalizeNDC --> FilterActive[Filter Active vs Inactive<br/>Check marketing_status<br/>Check expiration_date]
+    FDAFound --> FilterActive[Step 3: Filter Active vs Inactive<br/>Check marketing_status<br/>Check expiration_date]
     FilterActive --> ActiveProducts[Active Products: 45<br/>Inactive Products: 5]
     
     %% OpenAI Calculation Steps
-    ActiveProducts --> Step4[Step 4: Parse Instructions<br/>OpenAI GPT-4o]
-    Step4 -->|LLM Call| OpenAI1[OpenAI API<br/>Parse SIG to structured data<br/>api.openai.com/v1/chat/completions]
-    OpenAI1 -->|Returns parsed| Step5[Step 5: Calculate Quantity<br/>OpenAI GPT-5]
-    Step5 -->|LLM Call| OpenAI2[OpenAI Responses API<br/>Calculate total quantity<br/>api.openai.com/v1/responses]
-    OpenAI2 -->|Returns quantity| Step6[Step 6: Optimize Packaging<br/>OpenAI GPT-4o]
-    Step6 -->|LLM Call| OpenAI3[OpenAI API<br/>Calculate best package combo<br/>api.openai.com/v1/chat/completions]
-    OpenAI3 -->|Returns optimization| Step7[Step 7: Generate Summary<br/>OpenAI GPT-4o]
-    Step7 -->|LLM Call| OpenAI4[OpenAI API<br/>Create user-friendly summary<br/>api.openai.com/v1/chat/completions]
-    OpenAI4 -->|Returns summary| Save[Save to Firestore<br/>Calculation History]
+    ActiveProducts --> OpenAICalls[Step 4: OpenAI Calculation<br/>Multiple API calls sequentially:<br/>1. Parse Instructions GPT-4o<br/>2. Calculate Quantity GPT-5<br/>3. Optimize Packages GPT-4o<br/>4. Generate Explanation GPT-4o<br/>api.openai.com/v1/chat/completions<br/>api.openai.com/v1/responses]
+    OpenAICalls --> Save[Save to Firestore<br/>Calculation History]
     
     Save --> Display([Display Results<br/>to Pharmacist])
     
@@ -235,21 +217,14 @@ graph TB
     %% Styling
     style AutocompleteCheck fill:#e1f5ff
     style NormalizeStep fill:#e1f5ff
-    style Step4 fill:#fff4e1
-    style Step5 fill:#fff4e1
-    style Step6 fill:#fff4e1
-    style Step7 fill:#fff4e1
     style RxNormAPI fill:#d4edda
     style AutocompleteAPI fill:#d4edda
     style AutocompleteFallback fill:#d4edda
     style IngredientLookup fill:#d4edda
+    style FDASearch fill:#d4edda
     style FDAFound fill:#d4edda
-    style OpenAI1 fill:#ffe1e1
-    style OpenAI2 fill:#ffe1e1
-    style OpenAI3 fill:#ffe1e1
-    style OpenAI4 fill:#ffe1e1
+    style OpenAICalls fill:#ffe1e1
     style ConfidenceCheck fill:#fff4e1
-    style NormalizeNDC fill:#e1f5ff
     style FilterActive fill:#e1f5ff
     style Error1 fill:#ffcccc
 ```
@@ -299,7 +274,7 @@ graph TB
 
 **API**: FDA NDC Directory API
 - **Base Endpoint**: `https://api.fda.gov/drug/ndc.json`
-- **Search Strategies** (tried in order until one succeeds):
+- **Search Strategies** (tried sequentially until one succeeds):
   1. `generic_name:"metformin"` (exact match with quotes)
   2. `generic_name:metformin` (exact match without quotes)
   3. `brand_name:"metformin"` (brand name search)
@@ -307,21 +282,14 @@ graph TB
   5. `generic_name:"METFORMIN"` (uppercase variant)
   6. `generic_name:"{ingredient}"` (ingredient name from RxNorm, if available)
 - **Response**: Up to 100 NDC products with:
-  - NDC codes (various formats)
+  - NDC codes in **various formats** (5-4-2, 4-4-2, 5-3-2, 11-digit)
   - Generic/brand names
   - Package sizes and descriptions
   - Marketing status
   - Expiration dates
   - Active ingredients
 
-#### Step 5: NDC Code Normalization
-
-**Process**: Convert all NDC formats to standard 11-digit format
-- **Input formats**: "12345-678-90", "1234-5678-90", "12345-67-89", "12345678900"
-- **Output format**: "12345678900" (always 11 digits)
-- **Method**: Remove hyphens, pad with leading zeros
-
-#### Step 6: Filter Active vs Inactive Products
+#### Step 5: Filter Active vs Inactive Products
 
 **Process**: Determine which products are currently available
 - **Active criteria**:
@@ -330,7 +298,7 @@ graph TB
   - Not marked as "Discontinued", "Unapproved", or "Withdrawn"
 - **Result**: Separate lists of active and inactive products
 
-#### Step 7: Parse Prescription Instructions (OpenAI GPT-4o)
+#### Step 6: Parse Prescription Instructions (OpenAI GPT-4o)
 
 **API Call**: OpenAI Chat Completions API
 - **Endpoint**: `https://api.openai.com/v1/chat/completions`
@@ -349,7 +317,7 @@ graph TB
   }
   ```
 
-#### Step 8: Calculate Total Quantity (OpenAI GPT-5)
+#### Step 7: Calculate Total Quantity (OpenAI GPT-5)
 
 **API Call**: OpenAI Responses API (not Chat Completions)
 - **Endpoint**: `https://api.openai.com/v1/responses`
@@ -368,7 +336,7 @@ graph TB
   }
   ```
 
-#### Step 9: Optimize Package Selection (OpenAI GPT-4o)
+#### Step 8: Optimize Package Selection (OpenAI GPT-4o)
 
 **API Call**: OpenAI Chat Completions API
 - **Endpoint**: `https://api.openai.com/v1/chat/completions`
@@ -382,7 +350,7 @@ graph TB
   4. Generate alternatives
 - **Output**: Recommended package combination + alternatives with overfill percentages
 
-#### Step 10: Generate Explanation (OpenAI GPT-4o)
+#### Step 9: Generate Explanation (OpenAI GPT-4o)
 
 **API Call**: OpenAI Chat Completions API
 - **Endpoint**: `https://api.openai.com/v1/chat/completions`
@@ -391,7 +359,7 @@ graph TB
 - **Input**: All calculation results from previous steps
 - **Output**: Human-readable summary with recommendations, warnings, and alternatives
 
-#### Step 11: Assemble Final Result
+#### Step 10: Assemble Final Result
 
 **Process**: Combine all data into comprehensive result object
 - RxNorm data (RxCUI, normalized name, confidence)
@@ -402,7 +370,7 @@ graph TB
 - Explanation
 - Warnings
 
-#### Step 12: Save to History
+#### Step 11: Save to History
 
 **Storage**: Firestore database
 - Save complete calculation result
@@ -411,6 +379,8 @@ graph TB
 
 **Total Time**: ~8-10 seconds (autocomplete path) or ~10-12 seconds (manual path)  
 **Total Cost**: ~$0.08 per calculation (4 OpenAI API calls)
+
+**Note**: NDC codes are stored in their original format from FDA. Normalization to 11-digit format exists in the codebase but is not used in the main calculation workflow.
 
 ---
 
