@@ -8,6 +8,7 @@ on:
 
 jobs:
   deploy:
+    if: false  # Disabled - CI/CD not configured yet
     runs-on: ubuntu-latest
 
     steps:
